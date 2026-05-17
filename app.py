@@ -63,9 +63,10 @@ data_source = st.sidebar.radio(
 )
 
 if data_source == "Google スプレッドシート":
+    _default_sid = st.secrets.get("spreadsheet_id", os.getenv("SPREADSHEET_ID", ""))
     spreadsheet_id = st.sidebar.text_input(
         "スプレッドシート ID",
-        value=os.getenv("SPREADSHEET_ID", ""),
+        value=_default_sid,
         help="URLの /d/XXXXX/edit の XXXXX 部分",
     )
     cred_path = st.sidebar.text_input(
