@@ -538,6 +538,113 @@ else:
 if corrected_months:
     st.info(f"📊 実績データを予測に反映: {', '.join(corrected_months)}")
 
+# ─── 直近2週間の炊飯計画 ─────────────────────────────────────────
+st.markdown("---")
+st.subheader("📆 直近2週間の予測・炊飯計画")
+
+def _morning_rice_2wk(lo: int) -> int:
+    if lo < 13:
+        return 8
+    elif lo <= 16:
+        return 10
+    elif lo <= 18:
+        return 12
+    else:
+        return 16
+
+def _build_2wk_row(r, is_closed_series):
+    closed = is_closed_series[r.name] == 1
+    dow_map_2wk = {"Monday": "月", "Tuesday": "火", "Wednesday": "水", "Thursday": "木",
+                   "Friday": "金", "Saturday": "土", "Sunday": "日"}
+    date_str = r["ds"].strftime("%m/%d")
+    dow_str = r["ds"].day_name()
+    dow_ja = dow_map_2wk.get(dow_str, dow_str)
+    if closed:
+        return {
+            "date_str": date_str, "dow": dow_ja,
+            "sales": "休業日", "lower": "―", "upper": "―",
+            "est": "―", "morning": "―", "add": "―",
+            "is_closed": True,
+        }
+    lo = round((r["yhat"] + r["yhat_lower"]) / 2 / 2000)
+    hi = round((r["yhat_lower"] + r["yhat_upper"]) / 2 / 2000)
+    est = f"{lo}合" if lo >= hi else f"{lo}合〜{hi}合"
+    morning = _morning_rice_2wk(lo)
+    add_lo = max(lo - morning, 0)
+    add_hi = max(hi - morning, 0)
+    if add_lo == 0 and add_hi == 0:
+        add_str = "0合"
+    elif add_lo >= add_hi:
+        add_str = f"{add_lo}合"
+    else:
+        add_str = f"{add_lo}合〜{add_hi}合"
+    return {
+        "date_str": date_str, "dow": dow_ja,
+        "sales": f"¥{r['yhat']:,.0f}",
+        "lower": f"¥{r['yhat_lower']:,.0f}",
+        "upper": f"¥{r['yhat_upper']:,.0f}",
+        "est": est, "morning": f"{morning}合", "add": add_str,
+        "is_closed": False,
+    }
+
+_today_2wk = date.today()
+_end_2wk = _today_2wk + timedelta(days=13)
+_2wk_df = forecast_year_df[
+    (forecast_year_df["ds"].dt.date >= _today_2wk) &
+    (forecast_year_df["ds"].dt.date <= _end_2wk)
+].copy().reset_index(drop=True)
+
+if len(_2wk_df) > 0:
+    _is_closed_2wk = _2wk_df["is_closed"] if "is_closed" in _2wk_df.columns else (_2wk_df["yhat"] == 0).astype(int)
+    _rows_2wk = [_build_2wk_row(r, _is_closed_2wk) for _, r in _2wk_df.iterrows()]
+
+    # HTML テーブル生成
+    _header = (
+        "<thead><tr>"
+        "<th>日付</th><th>曜日</th>"
+        "<th>予測売上</th><th>下限</th><th>上限</th>"
+        "<th style='font-size:1.2em'>推定炊飯量</th>"
+        "<th style='font-size:1.2em'>朝イチ</th>"
+        "<th style='font-size:1.2em'>追加</th>"
+        "</tr></thead>"
+    )
+    _body_rows = []
+    for rw in _rows_2wk:
+        dow_color = "#c0392b" if rw["dow"] in ("土", "日") else "#2c3e50"
+        bg = "#f5f5f5" if rw["is_closed"] else "white"
+        rice_style = "color:#e67e22;font-weight:bold;font-size:1.25em;text-align:center"
+        closed_rice = "color:#aaa;text-align:center"
+        if rw["is_closed"]:
+            r_style = closed_rice
+        else:
+            r_style = rice_style
+        _body_rows.append(
+            f"<tr style='background:{bg}'>"
+            f"<td>{rw['date_str']}</td>"
+            f"<td style='color:{dow_color};font-weight:bold'>{rw['dow']}</td>"
+            f"<td>{rw['sales']}</td>"
+            f"<td style='color:#555'>{rw['lower']}</td>"
+            f"<td style='color:#555'>{rw['upper']}</td>"
+            f"<td style='{r_style}'>{rw['est']}</td>"
+            f"<td style='{r_style}'>{rw['morning']}</td>"
+            f"<td style='{r_style}'>{rw['add']}</td>"
+            f"</tr>"
+        )
+    _html_table = (
+        "<style>"
+        "table.forecast2wk {border-collapse:collapse;width:100%;font-size:0.95em}"
+        "table.forecast2wk th {background:#34495e;color:white;padding:8px 12px;text-align:center}"
+        "table.forecast2wk td {padding:7px 12px;border-bottom:1px solid #ddd;text-align:right}"
+        "table.forecast2wk td:nth-child(1), table.forecast2wk td:nth-child(2) {text-align:center}"
+        "</style>"
+        f"<table class='forecast2wk'>{_header}<tbody>{''.join(_body_rows)}</tbody></table>"
+    )
+    st.markdown(_html_table, unsafe_allow_html=True)
+else:
+    st.info("直近2週間のデータが見つかりません（予測年を確認してください）。")
+
+st.markdown("---")
+
 # ─── タブ表示 ────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 日次予測", "📅 月次サマリー", "🎯 予測 vs 実績", "🔍 要因分解", "📊 過去データ"])
 
