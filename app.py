@@ -238,13 +238,48 @@ if _write_clicked:
 
 
 # ─── メインエリア ────────────────────────────────────────────────
-_title_col, _text_col = st.columns([1, 9])
+
+# 円形「予測を実行」ボタン用 CSS
+st.markdown("""
+<style>
+div[data-testid="stMain"] div[data-testid="stHorizontalBlock"]:first-of-type
+  div[data-testid="column"]:last-child .stButton button {
+    background-color: #c0392b !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 50% !important;
+    width: 88px !important;
+    height: 88px !important;
+    min-height: unset !important;
+    font-size: 0.83em !important;
+    font-weight: bold !important;
+    line-height: 1.4 !important;
+    padding: 0 !important;
+    box-shadow: 0 3px 10px rgba(192,57,43,0.45) !important;
+    white-space: pre-line !important;
+}
+div[data-testid="stMain"] div[data-testid="stHorizontalBlock"]:first-of-type
+  div[data-testid="column"]:last-child .stButton button:hover {
+    background-color: #e74c3c !important;
+    transform: scale(1.06);
+    box-shadow: 0 4px 14px rgba(192,57,43,0.55) !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+_title_col, _text_col, _btn_col = st.columns([1, 7, 2])
 with _title_col:
     if os.path.exists(_logo_path):
         st.image(_logo_path, width=90)
 with _text_col:
     st.title("Kichiくん")
     st.caption(f"曜日・祝日・天候・気温を加味した日次売上予測 | 予測対象: {forecast_year}年")
+with _btn_col:
+    st.markdown("<div style='padding-top:8px'>", unsafe_allow_html=True)
+    run_button_circle = st.button("予測を\n実行", key="run_circle")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+run_button = run_button or run_button_circle
 
 if not run_button and "forecast_cache" not in st.session_state:
     st.info("👈 左のサイドバーで設定を行い、「予測を実行」ボタンを押してください。")
