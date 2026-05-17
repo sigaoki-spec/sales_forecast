@@ -142,9 +142,9 @@ st.sidebar.markdown("---")
 
 # ⑦ 店舗の場所
 st.sidebar.subheader("📍 店舗の場所（天候取得用）")
-location_name = st.sidebar.text_input("地名", value=os.getenv("LOCATION_NAME", "東京"))
-lat = st.sidebar.number_input("緯度", value=float(os.getenv("LATITUDE", 35.6762)), format="%.4f")
-lon = st.sidebar.number_input("経度", value=float(os.getenv("LONGITUDE", 139.6503)), format="%.4f")
+location_name = st.sidebar.text_input("地名", value=os.getenv("LOCATION_NAME", "館山"))
+lat = st.sidebar.number_input("緯度", value=float(os.getenv("LATITUDE", 34.9958)), format="%.4f")
+lon = st.sidebar.number_input("経度", value=float(os.getenv("LONGITUDE", 139.8687)), format="%.4f")
 
 st.sidebar.markdown("---")
 
