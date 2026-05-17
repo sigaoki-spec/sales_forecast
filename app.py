@@ -8,6 +8,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 import streamlit as st
+from PIL import Image as PILImage
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,9 +23,12 @@ from src.model import (build_features, train_model, make_future_df, evaluate_mod
                        adjust_by_manual_monthly_avg, apply_weekday_weekend_correction,
                        apply_obon_boost, apply_min_daily_floor, get_monthly_baseline_table)
 
+_logo_path = os.path.join(os.path.dirname(__file__), "assets", "fish_logo.png")
+_page_icon = PILImage.open(_logo_path) if os.path.exists(_logo_path) else "🍚"
+
 st.set_page_config(
     page_title="Kichiくん",
-    page_icon="🍚",
+    page_icon=_page_icon,
     layout="wide",
 )
 
@@ -234,8 +238,13 @@ if _write_clicked:
 
 
 # ─── メインエリア ────────────────────────────────────────────────
-st.title("🍚 Kichiくん")
-st.caption(f"曜日・祝日・天候・気温を加味した日次売上予測 | 予測対象: {forecast_year}年")
+_title_col, _text_col = st.columns([1, 9])
+with _title_col:
+    if os.path.exists(_logo_path):
+        st.image(_logo_path, width=90)
+with _text_col:
+    st.title("Kichiくん")
+    st.caption(f"曜日・祝日・天候・気温を加味した日次売上予測 | 予測対象: {forecast_year}年")
 
 if not run_button and "forecast_cache" not in st.session_state:
     st.info("👈 左のサイドバーで設定を行い、「予測を実行」ボタンを押してください。")
