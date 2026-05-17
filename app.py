@@ -265,6 +265,7 @@ if not run_button:
     actual_in_forecast_year = _c["actual_in_forecast_year"]
     sales_df                = _c["sales_df"]
     historical_weather      = _c["historical_weather"]
+    full_weather            = _c.get("full_weather", historical_weather)
     forecast                = _c["forecast"]
     holidays_df             = _c["holidays_df"]
     closed_info             = _c["closed_info"]
@@ -528,6 +529,7 @@ else:
         "actual_in_forecast_year": actual_in_forecast_year,
         "sales_df":                sales_df,
         "historical_weather":      historical_weather,
+        "full_weather":            full_weather,
         "forecast":                forecast,
         "holidays_df":             holidays_df,
         "closed_info":             closed_info,
@@ -582,8 +584,37 @@ def _rice_summary(yhat, yhat_lower, yhat_upper) -> tuple:
         add_str = f"{add_lo}合〜{add_hi}合"
     return morning, add_str
 
+def _weather_for(target_date) -> dict:
+    """full_weather から指定日の天候情報を取得。なければ空dict。"""
+    if full_weather is None or len(full_weather) == 0:
+        return {}
+    mask = full_weather["ds"].dt.date == target_date
+    sub = full_weather[mask]
+    return sub.iloc[0].to_dict() if len(sub) > 0 else {}
+
+def _weather_notes_day(target_date) -> list:
+    """1日分の天候変動要素を文言リストで返す"""
+    w = _weather_for(target_date)
+    notes = []
+    temp = w.get("temp_avg")
+    is_rain = w.get("is_rain", 0)
+    is_snow = w.get("is_snow", 0)
+    if is_snow:
+        notes.append("雪の予報があります")
+    elif is_rain:
+        notes.append("雨が降る予報があります")
+    if temp is not None:
+        if temp >= 30:
+            notes.append(f"気温が高く（{temp:.0f}℃前後）、暑くなりそうです")
+        elif temp >= 26:
+            notes.append(f"暑くなる見込みです（{temp:.0f}℃前後）")
+        elif temp <= 5:
+            notes.append(f"かなり冷え込む予報です（{temp:.0f}℃前後）")
+        elif temp <= 10:
+            notes.append(f"寒い一日になりそうです（{temp:.0f}℃前後）")
+    return notes
+
 def _day_summary_text(row_data) -> str:
-    """1日分の傾向テキストを生成"""
     if row_data is None:
         return "データなし"
     ds = row_data["ds"]
@@ -600,10 +631,19 @@ def _day_summary_text(row_data) -> str:
     yhat_upper = row_data.get("yhat_upper", yhat)
     level = _sales_level(yhat)
     morning, add_str = _rice_summary(yhat, yhat_lower, yhat_upper)
-    holiday_note = "　🎌 祝日" if is_holiday else ""
-    weekend_note = "　土日" if dow in ("土", "日") else ""
+
+    tags = []
+    if is_holiday:
+        tags.append("🎌 祝日")
+    if dow in ("土", "日"):
+        tags.append("週末")
+    tag_str = "　" + "・".join(tags) if tags else ""
+
+    weather_notes = _weather_notes_day(ds.date())
+    weather_str = ("　" + "、".join(weather_notes) + "。") if weather_notes else ""
+
     return (
-        f"**{date_label}{holiday_note}{weekend_note}** ─ {level}です。\n\n"
+        f"**{date_label}{tag_str}** ─ {level}です。{weather_str}\n\n"
         f"売上目安 **¥{yhat:,.0f}**（¥{yhat_lower:,.0f}〜¥{yhat_upper:,.0f}）\n\n"
         f"炊飯：朝イチ **{morning}合**　追加 **{add_str}**"
     )
@@ -626,34 +666,66 @@ _wk_df = forecast_year_df[
     (forecast_year_df["ds"].dt.date >= _today_s) &
     (forecast_year_df["ds"].dt.date <= _wk_end)
 ].copy()
-_wk_open = _wk_df[_wk_df.get("is_closed", pd.Series(0, index=_wk_df.index)).fillna(0) == 0] if "is_closed" in _wk_df.columns else _wk_df[_wk_df["yhat"] > 0]
+_wk_open = _wk_df[_wk_df["is_closed"] == 0] if "is_closed" in _wk_df.columns else _wk_df[_wk_df["yhat"] > 0]
 _wk_closed_cnt = len(_wk_df) - len(_wk_open)
 
 def _week_summary_text() -> str:
     if len(_wk_open) == 0:
         return "この1週間は全日休業の見込みです。"
-    total = _wk_open["yhat"].sum()
-    avg = _wk_open["yhat"].mean()
+
     peak_row = _wk_open.loc[_wk_open["yhat"].idxmax()]
     quiet_row = _wk_open.loc[_wk_open["yhat"].idxmin()]
     peak_label = f"{peak_row['ds'].month}/{peak_row['ds'].day}（{_dow_label(peak_row['ds'])}）"
     quiet_label = f"{quiet_row['ds'].month}/{quiet_row['ds'].day}（{_dow_label(quiet_row['ds'])}）"
     closed_note = f"　休業日 {_wk_closed_cnt}日含む" if _wk_closed_cnt > 0 else ""
+
+    # 祝日
+    holiday_days = _wk_open[_wk_open.get("is_holiday", pd.Series(0, index=_wk_open.index)).fillna(0) == 1] if "is_holiday" in _wk_open.columns else pd.DataFrame()
+    holiday_note = ""
+    if len(holiday_days) > 0:
+        h_labels = "・".join(
+            f"{r['ds'].month}/{r['ds'].day}（{_dow_label(r['ds'])}）"
+            for _, r in holiday_days.iterrows()
+        )
+        holiday_note = f"\n\n🎌 祝日あり：{h_labels}"
+
+    # 天候：雨日・暑い日
+    rain_days, hot_days, cold_days = [], [], []
+    for d in pd.date_range(_today_s, _wk_end, freq="D"):
+        w = _weather_for(d.date())
+        if not w:
+            continue
+        if w.get("is_snow") or w.get("is_rain"):
+            rain_days.append(f"{d.month}/{d.day}（{_dow_label(d)}）")
+        temp = w.get("temp_avg")
+        if temp is not None:
+            if temp >= 28:
+                hot_days.append(f"{d.month}/{d.day}（{_dow_label(d)}）")
+            elif temp <= 8:
+                cold_days.append(f"{d.month}/{d.day}（{_dow_label(d)}）")
+
+    weather_parts = []
+    if rain_days:
+        weather_parts.append(f"☔ 雨が降る予報：{' '.join(rain_days)}")
+    if hot_days:
+        weather_parts.append(f"🌡️ 暑くなりそうな日：{' '.join(hot_days)}")
+    if cold_days:
+        weather_parts.append(f"🧊 冷え込みそうな日：{' '.join(cold_days)}")
+    weather_note = ("\n\n" + "\n\n".join(weather_parts)) if weather_parts else ""
+
     lines = [
-        f"**{_today_s.month}/{_today_s.day}〜{_wk_end.month}/{_wk_end.day}** の週間まとめ{closed_note}",
+        f"**{_today_s.month}/{_today_s.day}〜{_wk_end.month}/{_wk_end.day}**{closed_note}",
         "",
-        f"合計見込み：**¥{total:,.0f}**（営業{len(_wk_open)}日）",
-        f"1日平均：**¥{avg:,.0f}**",
-        f"最も忙しい日：**{peak_label}** ¥{peak_row['yhat']:,.0f}",
-        f"最も静かな日：**{quiet_label}** ¥{quiet_row['yhat']:,.0f}",
+        f"最も忙しくなりそうな日：**{peak_label}**（¥{peak_row['yhat']:,.0f}前後）",
+        f"比較的落ち着きそうな日：**{quiet_label}**（¥{quiet_row['yhat']:,.0f}前後）",
     ]
-    return "\n\n".join(lines)
+    return "\n\n".join(lines) + holiday_note + weather_note
 
 # 今月
 _cur_month = _today_s.month
 _month_df = forecast_year_df[forecast_year_df["ds"].dt.month == _cur_month].copy()
 _month_open = _month_df[_month_df["is_closed"] == 0] if "is_closed" in _month_df.columns else _month_df[_month_df["yhat"] > 0]
-_month_remaining = forecast_year_df[
+_month_remaining_open = forecast_year_df[
     (forecast_year_df["ds"].dt.date >= _today_s) &
     (forecast_year_df["ds"].dt.month == _cur_month) &
     (forecast_year_df["is_closed"] == 0 if "is_closed" in forecast_year_df.columns else forecast_year_df["yhat"] > 0)
@@ -662,37 +734,79 @@ _month_remaining = forecast_year_df[
 def _month_summary_text() -> str:
     if len(_month_open) == 0:
         return f"{_cur_month}月のデータがありません。"
-    total = _month_open["yhat"].sum()
+
     avg = _month_open["yhat"].mean()
-    remain_total = _month_remaining["yhat"].sum() if len(_month_remaining) > 0 else 0
     target = manual_monthly_avg.get(_cur_month, 35_000) * (1 + growth_rate)
     gap = avg - target
     if gap >= 2_000:
-        vs_target = f"目標を **¥{gap:,.0f} 上回る** 水準"
+        vs_target = f"目標より **¥{gap:,.0f} 上回る** 水準"
     elif gap <= -2_000:
-        vs_target = f"目標を **¥{abs(gap):,.0f} 下回る** 水準"
+        vs_target = f"目標より **¥{abs(gap):,.0f} 下回る** 水準"
     else:
         vs_target = "目標とほぼ同水準"
-    # 週ごとの合計で最も忙しい週を特定
-    _month_df2 = _month_open.copy()
-    _month_df2["week"] = _month_df2["ds"].dt.isocalendar().week
-    week_totals = _month_df2.groupby("week")["yhat"].sum()
-    busy_week_num = week_totals.idxmax() if len(week_totals) > 0 else None
-    busy_week_note = ""
-    if busy_week_num is not None:
-        busy_days = _month_df2[_month_df2["week"] == busy_week_num]["ds"]
-        if len(busy_days) > 0:
-            w_start = busy_days.min()
-            w_end = busy_days.max()
-            busy_week_note = f"\n\n最も売上が見込まれる週：**{w_start.month}/{w_start.day}〜{w_end.month}/{w_end.day}** 頃"
+
+    # 残り営業日数
+    remain_days = len(_month_remaining_open)
+
+    # 残りの祝日
+    if "is_holiday" in _month_remaining_open.columns:
+        remain_holidays = _month_remaining_open[_month_remaining_open["is_holiday"] == 1]
+        if len(remain_holidays) > 0:
+            h_labels = "・".join(
+                f"{r['ds'].month}/{r['ds'].day}（{_dow_label(r['ds'])}）"
+                for _, r in remain_holidays.iterrows()
+            )
+            holiday_note = f"\n\n🎌 今月の残り祝日：{h_labels}"
+        else:
+            holiday_note = ""
+    else:
+        holiday_note = ""
+
+    # 残り期間の天候傾向
+    remain_dates = pd.date_range(_today_s, date(_today_s.year, _cur_month,
+        pd.Timestamp(_today_s.year, _cur_month, 1).days_in_month), freq="D")
+    rain_cnt = sum(1 for d in remain_dates if _weather_for(d.date()).get("is_rain") or _weather_for(d.date()).get("is_snow"))
+    hot_cnt  = sum(1 for d in remain_dates if (_weather_for(d.date()).get("temp_avg") or 0) >= 28)
+    cold_cnt = sum(1 for d in remain_dates if 0 < (_weather_for(d.date()).get("temp_avg") or 99) <= 8)
+
+    weather_parts = []
+    if rain_cnt >= 3:
+        weather_parts.append(f"☔ 雨天が多い見込みです（残り{rain_cnt}日程度）")
+    elif rain_cnt >= 1:
+        weather_parts.append(f"☔ 雨が降る日が{rain_cnt}日ほどある見込みです")
+    if hot_cnt >= 5:
+        weather_parts.append(f"🌡️ 暑い日が続く見込みです（残り{hot_cnt}日程度）")
+    elif hot_cnt >= 1:
+        weather_parts.append(f"🌡️ 暑くなる日が{hot_cnt}日ほどある見込みです")
+    if cold_cnt >= 1:
+        weather_parts.append(f"🧊 冷え込む日が{cold_cnt}日ほどある見込みです")
+    weather_note = ("\n\n" + "\n\n".join(weather_parts)) if weather_parts else ""
+
+    # 最も忙しい週
+    if len(_month_remaining_open) > 0:
+        _rem2 = _month_remaining_open.copy()
+        _rem2["week"] = _rem2["ds"].dt.isocalendar().week
+        week_totals = _rem2.groupby("week")["yhat"].sum()
+        if len(week_totals) > 0:
+            busy_week_num = week_totals.idxmax()
+            busy_days = _rem2[_rem2["week"] == busy_week_num]["ds"]
+            if len(busy_days) > 0:
+                w_start = busy_days.min()
+                w_end = busy_days.max()
+                busy_note = f"\n\n特に忙しくなりそうな週：**{w_start.month}/{w_start.day}〜{w_end.month}/{w_end.day}** 頃"
+            else:
+                busy_note = ""
+        else:
+            busy_note = ""
+    else:
+        busy_note = ""
+
     lines = [
-        f"**{_cur_month}月** の月間まとめ",
+        f"**{_cur_month}月** の見通し（残り営業 {remain_days}日）",
         "",
-        f"月間合計見込み：**¥{total:,.0f}**（営業{len(_month_open)}日）",
-        f"1日平均：**¥{avg:,.0f}**　（{vs_target}）",
-        f"今日以降の残り売上見込み：**¥{remain_total:,.0f}**{busy_week_note}",
+        f"1日平均：**¥{avg:,.0f}**　{vs_target}",
     ]
-    return "\n\n".join(lines)
+    return "\n\n".join(lines) + busy_note + holiday_note + weather_note
 
 _col_today, _col_week, _col_month = st.columns(3)
 
