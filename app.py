@@ -23,8 +23,8 @@ from src.model import (build_features, train_model, make_future_df, evaluate_mod
                        apply_obon_boost, apply_min_daily_floor, get_monthly_baseline_table)
 
 st.set_page_config(
-    page_title="売上予測ダッシュボード",
-    page_icon="📊",
+    page_title="Kichiくん",
+    page_icon="🍚",
     layout="wide",
 )
 
@@ -234,7 +234,7 @@ if _write_clicked:
 
 
 # ─── メインエリア ────────────────────────────────────────────────
-st.title("📊 飲食店 売上予測ダッシュボード")
+st.title("🍚 Kichiくん")
 st.caption(f"曜日・祝日・天候・気温を加味した日次売上予測 | 予測対象: {forecast_year}年")
 
 if not run_button and "forecast_cache" not in st.session_state:
