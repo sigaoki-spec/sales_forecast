@@ -597,7 +597,7 @@ with _adv_ico:
     if os.path.exists(_logo_path):
         st.image(_logo_path, width=52)
 with _adv_txt:
-    st.subheader("Kichiくんからのアドバイス")
+    st.markdown("<h3 style='margin:0'>Kichi<span style='font-size:0.55em;vertical-align:middle'>くん</span>からのアドバイス</h3>", unsafe_allow_html=True)
 
 def _sales_level(yhat: float) -> str:
     if yhat < 25_000:
