@@ -63,7 +63,10 @@ data_source = st.sidebar.radio(
 )
 
 if data_source == "Google スプレッドシート":
-    _default_sid = st.secrets.get("spreadsheet_id", os.getenv("SPREADSHEET_ID", ""))
+    try:
+        _default_sid = st.secrets.get("spreadsheet_id", os.getenv("SPREADSHEET_ID", ""))
+    except Exception:
+        _default_sid = os.getenv("SPREADSHEET_ID", "")
     spreadsheet_id = st.sidebar.text_input(
         "スプレッドシート ID",
         value=_default_sid,
