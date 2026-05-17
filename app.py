@@ -553,7 +553,12 @@ if corrected_months:
 st.markdown("---")
 
 # ─── 傾向サマリー（今日・明日 / 1週間 / 今月）─────────────────────
-st.subheader("🐟 Kichiくんからのアドバイス")
+_adv_ico, _adv_txt = st.columns([1, 11])
+with _adv_ico:
+    if os.path.exists(_logo_path):
+        st.image(_logo_path, width=52)
+with _adv_txt:
+    st.subheader("Kichiくんからのアドバイス")
 
 def _sales_level(yhat: float) -> str:
     if yhat < 25_000:
