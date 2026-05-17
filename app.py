@@ -266,6 +266,7 @@ if not run_button and "forecast_cache" not in st.session_state:
     st.stop()
 
 # ─── キャッシュ読み込み or 新規計算 ─────────────────────────────────
+_run_logs = []
 if not run_button:
     _c = st.session_state["forecast_cache"]
     forecast_year_df        = _c["forecast_year_df"]
@@ -314,14 +315,14 @@ else:
                 sales_df = load_from_csv(uploaded_file, date_col=date_col_name, sales_col=sales_col_name)
             else:
                 sales_df = generate_sample_data(years=3)
-                st.info("サンプルデータを使用しています（過去3年分）。")
+                _run_logs.append("サンプルデータ（過去3年分）")
 
             total_days = len(sales_df)
             closed_days = (sales_df["y"] == 0).sum()
             open_days = total_days - closed_days
-            st.success(
-                f"売上データ読み込み完了: {total_days}日分（{sales_df['ds'].min().date()} 〜 {sales_df['ds'].max().date()}）"
-                f" ／ 営業日: {open_days}日・休業日: {closed_days}日"
+            _run_logs.append(
+                f"売上 {total_days}日分（{sales_df['ds'].min().date()} 〜 {sales_df['ds'].max().date()}）"
+                f" ／ 営業{open_days}日・休業{closed_days}日"
             )
 
             baseline_tbl = get_monthly_baseline_table(sales_df, base_year)
@@ -345,7 +346,7 @@ else:
     if closed_info["closed_weekdays"]:
         dow_labels = {0: "月", 1: "火", 2: "水", 3: "木", 4: "金", 5: "土", 6: "日"}
         closed_names = "・".join(dow_labels[d] for d in sorted(closed_info["closed_weekdays"]))
-        st.info(f"🔍 定休日を検出しました：**{closed_names}曜日**　（予測でも休業日として0円に設定します）")
+        _run_logs.append(f"定休日: {closed_names}曜日")
 
     # ─── 天候データ取得 ─────────────────────────────────────────────
     with st.spinner("天候データを取得しています..."):
@@ -373,9 +374,9 @@ else:
             full_weather = pd.concat([historical_weather, all_future_weather], ignore_index=True)
             full_weather = full_weather.drop_duplicates(subset=["ds"]).sort_values("ds").reset_index(drop=True)
 
-            st.success(f"天候データ取得完了: {location_name}（{hist_start} 〜 {forecast_end}）")
+            _run_logs.append(f"天候: {location_name} 取得完了")
         except Exception as e:
-            st.warning(f"天候データの取得に失敗しました: {e}\n天候なしで予測します。")
+            _run_logs.append(f"天候データ取得失敗（なしで予測）")
             full_weather = pd.DataFrame(columns=["ds", "temp_avg", "is_rain", "is_snow", "precipitation"])
             historical_weather = full_weather.copy()
 
@@ -395,9 +396,9 @@ else:
             future_trends_df = estimate_future_trends(historical_trends, future_dates_trends)
             full_trends = pd.concat([historical_trends, future_trends_df], ignore_index=True)
             full_trends = full_trends.drop_duplicates(subset=["ds"]).sort_values("ds").reset_index(drop=True)
-            st.success(f"Google Trends 取得完了（{len(historical_trends)}日分）")
+            _run_logs.append(f"Trends: {len(historical_trends)}日分")
         except Exception as e:
-            st.warning(f"Google Trends の取得に失敗しました: {e}\nトレンドなしで予測します。")
+            _run_logs.append("Trends取得失敗（なしで予測）")
             full_trends = pd.DataFrame(columns=["ds", "trends_index"])
 
     # ─── 特徴量エンジニアリング & モデル学習 ─────────────────────────
@@ -411,7 +412,7 @@ else:
                 sales_cap=sales_cap if use_sales_cap else None,
                 sales_floor=sales_floor if use_sales_cap else None,
             )
-            st.success("モデル学習完了！")
+            _run_logs.append("学習完了")
         except Exception as e:
             st.error(f"モデル学習エラー: {e}")
             st.stop()
@@ -546,8 +547,16 @@ else:
     }
 
 
+_status_parts = list(_run_logs)
 if corrected_months:
-    st.info(f"📊 実績データを予測に反映: {', '.join(corrected_months)}")
+    _status_parts.append(f"実績反映: {', '.join(corrected_months)}")
+if _status_parts:
+    st.markdown(
+        "<div style='font-size:0.78em;color:#888;line-height:1.8;padding:2px 0'>"
+        + "　／　".join(_status_parts)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
 # ─── 直近2週間の炊飯計画 ─────────────────────────────────────────
 st.markdown("---")
