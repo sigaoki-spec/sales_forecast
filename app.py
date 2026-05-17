@@ -811,36 +811,18 @@ def _month_summary_text() -> str:
 _col_today, _col_week, _col_month = st.columns(3)
 
 with _col_today:
-    st.markdown(
-        "<div style='background:#fff8f0;border-left:4px solid #e67e22;"
-        "padding:16px;border-radius:6px;min-height:180px'>"
-        "<p style='color:#e67e22;font-weight:bold;margin:0 0 8px'>📅 今日・明日</p>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("##### 📅 今日・明日")
     st.markdown(_day_summary_text(_today_row))
     st.markdown("---")
     st.markdown(_day_summary_text(_tomorrow_row))
-    st.markdown("</div>", unsafe_allow_html=True)
 
 with _col_week:
-    st.markdown(
-        "<div style='background:#f0f8ff;border-left:4px solid #2980b9;"
-        "padding:16px;border-radius:6px;min-height:180px'>"
-        "<p style='color:#2980b9;font-weight:bold;margin:0 0 8px'>📈 この1週間</p>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("##### 📈 この1週間")
     st.markdown(_week_summary_text())
-    st.markdown("</div>", unsafe_allow_html=True)
 
 with _col_month:
-    st.markdown(
-        "<div style='background:#f0fff4;border-left:4px solid #27ae60;"
-        "padding:16px;border-radius:6px;min-height:180px'>"
-        f"<p style='color:#27ae60;font-weight:bold;margin:0 0 8px'>🗓️ {_cur_month}月の見通し</p>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"##### 🗓️ {_cur_month}月の見通し")
     st.markdown(_month_summary_text())
-    st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("---")
 st.subheader("📆 直近2週間の予測・炊飯計画")
