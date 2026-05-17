@@ -244,7 +244,7 @@ if _write_clicked:
 st.markdown("""
 <style>
 [data-testid="stMain"] [data-testid="stBaseButton-primary"] {
-    background-color: #c0392b !important;
+    background-color: #FF0000 !important;
     color: white !important;
     border: none !important;
     border-radius: 50% !important;
@@ -255,14 +255,14 @@ st.markdown("""
     font-weight: bold !important;
     line-height: 1.45 !important;
     padding: 0 !important;
-    box-shadow: 0 3px 10px rgba(192,57,43,0.45) !important;
+    box-shadow: 0 3px 10px rgba(255,0,0,0.4) !important;
     white-space: pre-line !important;
     transition: all 0.15s ease !important;
 }
 [data-testid="stMain"] [data-testid="stBaseButton-primary"]:hover {
-    background-color: #e74c3c !important;
+    background-color: #cc0000 !important;
     transform: scale(1.07) !important;
-    box-shadow: 0 5px 16px rgba(192,57,43,0.6) !important;
+    box-shadow: 0 5px 16px rgba(255,0,0,0.55) !important;
 }
 </style>
 """, unsafe_allow_html=True)
