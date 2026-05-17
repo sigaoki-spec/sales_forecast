@@ -13,15 +13,25 @@ SCOPES = [
 ]
 
 
+def _get_credentials(credentials_path: str = None):
+    try:
+        import streamlit as st
+        if "gcp_service_account" in st.secrets:
+            return Credentials.from_service_account_info(dict(st.secrets["gcp_service_account"]), scopes=SCOPES)
+    except Exception:
+        pass
+    return Credentials.from_service_account_file(credentials_path, scopes=SCOPES)
+
+
 def load_from_google_sheets(
     spreadsheet_id: str,
-    credentials_path: str,
+    credentials_path: str = None,
     sheet_name: str = None,
     date_col: int = 0,
     sales_col: int = 1,
     header_row: int = 1,
 ) -> pd.DataFrame:
-    creds = Credentials.from_service_account_file(credentials_path, scopes=SCOPES)
+    creds = _get_credentials(credentials_path)
     client = gspread.authorize(creds)
 
     spreadsheet = client.open_by_key(spreadsheet_id)
@@ -54,14 +64,14 @@ def load_from_google_sheets(
 
 def load_from_google_sheets_horizontal(
     spreadsheet_id: str,
-    credentials_path: str,
+    credentials_path: str = None,
     sheet_name: str = None,
     date_row: int = 2,
     sales_row: int = 29,
     start_col: int = 1,
 ) -> pd.DataFrame:
     """横向きレイアウト用：日付と売上がそれぞれ1行に並んでいる場合"""
-    creds = Credentials.from_service_account_file(credentials_path, scopes=SCOPES)
+    creds = _get_credentials(credentials_path)
     client = gspread.authorize(creds)
 
     spreadsheet = client.open_by_key(spreadsheet_id)
@@ -129,8 +139,8 @@ def _col_to_letter(col: int) -> str:
 
 def write_forecast_to_sheets(
     spreadsheet_id: str,
-    credentials_path: str,
-    forecast_df: pd.DataFrame,
+    credentials_path: str = None,
+    forecast_df: pd.DataFrame = None,
     sheet_name: str = None,
     date_row: int = 2,
     target_row: int = 23,
@@ -142,7 +152,7 @@ def write_forecast_to_sheets(
     一致する列の target_row 行に yhat（整数）を書き込む。
     戻り値: {"written": 書き込み件数, "matched": マッチ件数, "date_sample": 日付サンプル}
     """
-    creds = Credentials.from_service_account_file(credentials_path, scopes=SCOPES)
+    creds = _get_credentials(credentials_path)
     client = gspread.authorize(creds)
 
     spreadsheet = client.open_by_key(spreadsheet_id)
