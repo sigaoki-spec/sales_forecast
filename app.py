@@ -55,8 +55,111 @@ if not check_password():
     st.stop()
 
 # ─── サイドバー設定 ────────────────────────────────────────────────
-st.sidebar.title("⚙️ 設定")
 
+# ① 予測を実行ボタン（最上部）
+run_button = st.sidebar.button("🔮 予測を実行", type="primary", use_container_width=True)
+
+# ② スプレッドシートに書き込むボタン（仮置き・ハンドラは後で）
+_write_clicked = st.sidebar.button("📤 スプレッドシートに書き込む", use_container_width=True)
+
+st.sidebar.markdown("---")
+
+# ③ 予測設定
+st.sidebar.subheader("📅 予測設定")
+forecast_year = st.sidebar.number_input("予測対象年", value=date.today().year, min_value=2024, max_value=2030)
+base_year = forecast_year - 1
+
+st.sidebar.markdown("---")
+
+# ④ 前年比・月次実績設定
+st.sidebar.subheader("📈 前年比・月次実績設定")
+growth_rate = 0.0
+manual_monthly_avg = {}
+
+growth_pct = st.sidebar.slider(
+    f"前年（{base_year}年）比",
+    min_value=-30, max_value=50, value=10, step=1,
+    format="%d%%",
+    help="0%=前年と同じ、+10%=前年より10%増を想定",
+)
+growth_rate = growth_pct / 100.0
+if growth_pct > 0:
+    st.sidebar.success(f"前年比 +{growth_pct}%（増収想定）")
+elif growth_pct < 0:
+    st.sidebar.warning(f"前年比 {growth_pct}%（減収想定）")
+else:
+    st.sidebar.info("前年並みを想定")
+
+st.sidebar.caption("各月の「営業日あたりの売上平均」（前年実績）")
+default_avgs = {
+    1: 33199, 2: 33678, 3: 34838,
+    4: 35974, 5: 36819, 6: 26304,
+    7: 35529, 8: 54293, 9: 40670,
+    10: 31767, 11: 33701, 12: 26900,
+}
+month_names = {1:"1月",2:"2月",3:"3月",4:"4月",5:"5月",6:"6月",
+               7:"7月",8:"8月",9:"9月",10:"10月",11:"11月",12:"12月"}
+cols_a, cols_b = st.sidebar.columns(2)
+for m in range(1, 13):
+    col = cols_a if m % 2 == 1 else cols_b
+    val = col.number_input(
+        month_names[m], value=default_avgs[m],
+        step=500, key=f"manual_avg_{m}",
+    )
+    manual_monthly_avg[m] = val
+
+st.sidebar.markdown("---")
+
+# ⑤ お盆設定
+st.sidebar.subheader("🏮 お盆ウィーク設定（8月）")
+obon_multiplier = st.sidebar.slider(
+    "お盆期間（8/10〜18）の売上倍率",
+    min_value=1.0, max_value=3.0, value=1.8, step=0.1,
+    help="通常日を1.0とした場合のお盆期間の売上比率。8月の月合計は変わりません。",
+)
+
+st.sidebar.markdown("---")
+
+# ⑥ 下限設定
+st.sidebar.subheader("🛡️ 営業日平均の下限設定")
+min_monthly_avg = st.sidebar.number_input(
+    "月間 営業日平均の下限（円）",
+    value=26_000, step=1_000,
+    help="月間の営業日平均がこの金額を下回る月は底上げします。",
+)
+min_annual_avg = st.sidebar.number_input(
+    "年間 営業日平均の下限（円）",
+    value=35_000, step=1_000,
+    help="年間の営業日平均がこの金額を下回る場合、全体を底上げします。",
+)
+st.sidebar.caption("個々の日の売上は変動します（¥8,000台の日も許容）")
+
+st.sidebar.markdown("---")
+
+# ⑦ 店舗の場所
+st.sidebar.subheader("📍 店舗の場所（天候取得用）")
+location_name = st.sidebar.text_input("地名", value=os.getenv("LOCATION_NAME", "東京"))
+lat = st.sidebar.number_input("緯度", value=float(os.getenv("LATITUDE", 35.6762)), format="%.4f")
+lon = st.sidebar.number_input("経度", value=float(os.getenv("LONGITUDE", 139.6503)), format="%.4f")
+
+st.sidebar.markdown("---")
+
+# ⑧ 詳細設定
+with st.sidebar.expander("⚙️ 詳細設定"):
+    changepoint_prior = st.slider(
+        "トレンド感度", min_value=0.001, max_value=0.1,
+        value=0.01, step=0.001, format="%.3f",
+    )
+    use_sales_cap = st.checkbox("売上の上限・下限を設定する", value=False)
+    sales_cap = sales_floor = None
+    if use_sales_cap:
+        sales_cap = st.number_input("1日の売上上限（円）", value=500_000, step=10_000)
+        sales_floor = st.number_input("1日の売上下限（円）", value=30_000, step=5_000)
+
+st.sidebar.markdown("---")
+
+# ⑨ データ設定（最下部）
+st.sidebar.subheader("⚙️ データ設定")
 data_source = st.sidebar.radio(
     "データソース",
     ["Google スプレッドシート", "CSV ファイル", "サンプルデータで試す"],
@@ -77,14 +180,12 @@ if data_source == "Google スプレッドシート":
         value=os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH", "credentials.json"),
     )
     sheet_name = st.sidebar.text_input("シート名（空欄で先頭シート）", value="")
-
     layout_type = st.sidebar.radio(
         "データの並び方",
         ["縦（日付と売上が列）", "横（日付と売上が行）"],
         index=1,
         help="縦：A列=日付・B列=売上 / 横：2行目=日付・24行目=総売上 のような配置",
     )
-
     if layout_type == "縦（日付と売上が列）":
         date_col_idx = st.sidebar.number_input("日付の列番号（A列=0）", value=0, min_value=0)
         sales_col_idx = st.sidebar.number_input("売上の列番号（B列=1）", value=1, min_value=0)
@@ -102,121 +203,34 @@ elif data_source == "CSV ファイル":
     date_col_name = st.sidebar.text_input("日付列名", value="date")
     sales_col_name = st.sidebar.text_input("売上列名", value="sales")
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📍 店舗の場所（天候取得用）")
-location_name = st.sidebar.text_input("地名", value=os.getenv("LOCATION_NAME", "東京"))
-lat = st.sidebar.number_input("緯度", value=float(os.getenv("LATITUDE", 35.6762)), format="%.4f")
-lon = st.sidebar.number_input("経度", value=float(os.getenv("LONGITUDE", 139.6503)), format="%.4f")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("📅 予測設定")
-forecast_year = st.sidebar.number_input("予測対象年", value=date.today().year, min_value=2024, max_value=2030)
-base_year = forecast_year - 1  # 前年
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("📈 前年比・月次実績設定")
-growth_rate = 0.0
-manual_monthly_avg = {}  # {月: 営業日平均売上}
-
-growth_pct = st.sidebar.slider(
-    f"前年（{base_year}年）比",
-    min_value=-30, max_value=50, value=10, step=1,
-    format="%d%%",
-    help="0%=前年と同じ、+10%=前年より10%増を想定",
-)
-growth_rate = growth_pct / 100.0
-if growth_pct > 0:
-    st.sidebar.success(f"前年比 +{growth_pct}%（増収想定）")
-elif growth_pct < 0:
-    st.sidebar.warning(f"前年比 {growth_pct}%（減収想定）")
-else:
-    st.sidebar.info("前年並みを想定")
-
-st.sidebar.caption("各月の「営業日あたりの売上平均」（前年実績）")
-# デフォルト値（前年実績をもとに設定）
-default_avgs = {
-    1: 33199, 2: 33678, 3: 34838,
-    4: 35974, 5: 36819, 6: 26304,
-    7: 35529, 8: 54293, 9: 40670,
-    10: 31767, 11: 33701, 12: 26900,
-}
-month_names = {1:"1月",2:"2月",3:"3月",4:"4月",5:"5月",6:"6月",
-               7:"7月",8:"8月",9:"9月",10:"10月",11:"11月",12:"12月"}
-cols_a, cols_b = st.sidebar.columns(2)
-for m in range(1, 13):
-    col = cols_a if m % 2 == 1 else cols_b
-    val = col.number_input(
-        month_names[m], value=default_avgs[m],
-        step=500, key=f"manual_avg_{m}",
-    )
-    manual_monthly_avg[m] = val
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("🏮 お盆ウィーク設定（8月）")
-obon_multiplier = st.sidebar.slider(
-    "お盆期間（8/10〜18）の売上倍率",
-    min_value=1.0, max_value=3.0, value=1.8, step=0.1,
-    help="通常日を1.0とした場合のお盆期間の売上比率。8月の月合計は変わりません。",
-)
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("🛡️ 営業日平均の下限設定")
-min_monthly_avg = st.sidebar.number_input(
-    "月間 営業日平均の下限（円）",
-    value=26_000,
-    step=1_000,
-    help="月間の営業日平均がこの金額を下回る月は底上げします。個々の日は下回ることがあります。",
-)
-min_annual_avg = st.sidebar.number_input(
-    "年間 営業日平均の下限（円）",
-    value=35_000,
-    step=1_000,
-    help="年間の営業日平均がこの金額を下回る場合、全体を底上げします。",
-)
-st.sidebar.caption("個々の日の売上は変動します（¥8,000台の日も許容）")
-
-# モデルパラメータ（詳細設定）
-with st.sidebar.expander("⚙️ 詳細設定"):
-    changepoint_prior = st.slider(
-        "トレンド感度", min_value=0.001, max_value=0.1,
-        value=0.01, step=0.001, format="%.3f",
-    )
-    use_sales_cap = st.checkbox("売上の上限・下限を設定する", value=False)
-    sales_cap = sales_floor = None
-    if use_sales_cap:
-        sales_cap = st.number_input("1日の売上上限（円）", value=500_000, step=10_000)
-        sales_floor = st.number_input("1日の売上下限（円）", value=30_000, step=5_000)
-
-run_button = st.sidebar.button("🔮 予測を実行", type="primary", use_container_width=True)
-
-if data_source == "Google スプレッドシート":
-    st.sidebar.markdown("---")
-    st.sidebar.caption("23行目:予測 / 24行目:下限 / 25行目:上限")
-    if st.sidebar.button("📤 スプレッドシートに書き込む", use_container_width=True):
-        if "forecast_cache" not in st.session_state:
-            st.sidebar.warning("先に「予測を実行」を押してください。")
-        else:
-            _fc = st.session_state["forecast_cache"]
-            try:
-                result = write_forecast_to_sheets(
-                    spreadsheet_id=spreadsheet_id,
-                    credentials_path=cred_path,
-                    forecast_df=_fc["forecast_year_df"],
-                    sheet_name=sheet_name or None,
-                    date_row=date_row_idx,
-                    target_row=23,
-                    start_col=start_col_idx,
+# ② 書き込みボタンのハンドラ（全変数定義後）
+if _write_clicked:
+    if data_source != "Google スプレッドシート":
+        st.sidebar.warning("Google スプレッドシート使用時のみ有効です。")
+    elif "forecast_cache" not in st.session_state:
+        st.sidebar.warning("先に「予測を実行」を押してください。")
+    else:
+        _fc = st.session_state["forecast_cache"]
+        try:
+            result = write_forecast_to_sheets(
+                spreadsheet_id=spreadsheet_id,
+                credentials_path=cred_path,
+                forecast_df=_fc["forecast_year_df"],
+                sheet_name=sheet_name or None,
+                date_row=date_row_idx,
+                target_row=23,
+                start_col=start_col_idx,
+            )
+            if result["written"] > 0:
+                st.sidebar.success(f"✅ {result['written']}件 書き込み完了")
+            else:
+                st.sidebar.warning(
+                    f"⚠️ 0件でした\n"
+                    f"日付サンプル: {', '.join(result['date_sample'])}\n"
+                    f"有効列数: {result['total_cols']}"
                 )
-                if result["written"] > 0:
-                    st.sidebar.success(f"✅ {result['written']}件 書き込み完了")
-                else:
-                    st.sidebar.warning(
-                        f"⚠️ 0件でした\n"
-                        f"日付サンプル: {', '.join(result['date_sample'])}\n"
-                        f"有効列数: {result['total_cols']}"
-                    )
-            except Exception as e:
-                st.sidebar.error(f"エラー: {e}")
+        except Exception as e:
+            st.sidebar.error(f"エラー: {e}")
 
 
 # ─── メインエリア ────────────────────────────────────────────────
