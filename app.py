@@ -683,6 +683,20 @@ def _day_summary_text(row_data) -> str:
     level = _sales_level(yhat)
     morning, add_str = _rice_summary(yhat, yhat_lower, yhat_upper)
 
+    # 曜日・祝日のリード文
+    if is_holiday:
+        lead = "祝日なので、"
+    elif dow == "土":
+        lead = "土曜日なので、"
+    elif dow == "日":
+        lead = "日曜日なので、"
+    elif dow == "月":
+        lead = "月曜日なので、"
+    elif dow == "金":
+        lead = "金曜日なので、"
+    else:
+        lead = "平日なので、"
+
     tags = []
     if is_holiday:
         tags.append("🎌 祝日")
@@ -693,10 +707,23 @@ def _day_summary_text(row_data) -> str:
     weather_notes = _weather_notes_day(ds.date())
     weather_str = ("　" + "、".join(weather_notes) + "。") if weather_notes else ""
 
+    # 売上予測に応じたアドバイス
+    if yhat >= 40_000:
+        sales_advice = "開店前に惣菜皿を多めに準備しておきましょう。"
+    elif yhat < 25_000:
+        sales_advice = "手が空いたら、厨房内やフロアなどの清掃もできる範囲でお願いします。"
+    elif yhat < 30_000:
+        sales_advice = "週末に向けた仕込みを頑張ってください。"
+    else:
+        sales_advice = ""
+
+    advice_str = f"\n\n💬 {lead}{sales_advice}" if sales_advice else ""
+
     return (
         f"**{date_label}{tag_str}** ─ {level}です。{weather_str}\n\n"
         f"売上目安 **¥{yhat:,.0f}**（¥{yhat_lower:,.0f}〜¥{yhat_upper:,.0f}）\n\n"
         f"炊飯：朝イチ **{morning}合**　追加 **{add_str}**"
+        f"{advice_str}"
     )
 
 _today_s = date.today()
