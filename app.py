@@ -28,6 +28,32 @@ st.set_page_config(
     layout="wide",
 )
 
+# ─── パスワード認証 ───────────────────────────────────────────────
+def check_password():
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
+    if st.session_state["authenticated"]:
+        return True
+    try:
+        correct_password = st.secrets["app_password"]
+    except Exception:
+        correct_password = None
+    if correct_password is None:
+        st.session_state["authenticated"] = True
+        return True
+    st.title("🔐 ログイン")
+    password = st.text_input("パスワードを入力してください", type="password")
+    if st.button("ログイン"):
+        if password == correct_password:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("パスワードが違います")
+    return False
+
+if not check_password():
+    st.stop()
+
 # ─── サイドバー設定 ────────────────────────────────────────────────
 st.sidebar.title("⚙️ 設定")
 
