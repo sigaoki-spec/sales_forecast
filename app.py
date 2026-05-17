@@ -255,6 +255,7 @@ if not run_button and "forecast_cache" not in st.session_state:
     - 今年1年間の日次売上を予測
     - 売上に影響する要因の分解グラフを表示
     - 月次・週次サマリーの表示
+    - **炊飯量の目安を提案**（朝イチ・追加分）
 
     ### データ形式（Google スプレッドシート / CSV）
     | 日付 | 売上 |
