@@ -272,7 +272,7 @@ with _title_col:
     if os.path.exists(_logo_path):
         st.image(_logo_path, width=90)
 with _text_col:
-    st.title("Kichiくん")
+    st.markdown("<h1 style='margin-bottom:0'>Kichi<span style='font-size:0.55em;vertical-align:middle'>くん</span></h1>", unsafe_allow_html=True)
     st.caption(f"曜日・祝日・天候・気温を加味した日次売上予測 | 予測対象: {forecast_year}年")
 with _btn_col:
     st.markdown("<div style='padding-top:8px'>", unsafe_allow_html=True)
