@@ -598,16 +598,14 @@ with _adv_txt:
     st.markdown("<h3 style='margin:0'>Kichi<span style='font-size:0.55em;vertical-align:middle'>くん</span>からのアドバイス</h3>", unsafe_allow_html=True)
 
 def _sales_level(yhat: float) -> str:
-    if yhat < 25_000:
-        return "静かな一日になりそう"
-    elif yhat < 40_000:
-        return "ほどよい忙しさが予想される"
-    elif yhat < 60_000:
+    if yhat >= 40_000:
+        return "忙しい一日になりそう"
+    elif yhat >= 35_000:
         return "やや忙しい一日になりそう"
-    elif yhat < 80_000:
-        return "忙しい一日が予想される"
+    elif yhat >= 30_000:
+        return "まずまず忙しい一日になりそう"
     else:
-        return "かなり忙しい一日になりそう"
+        return "来店は少なめになりそう"
 
 def _dow_label(ds) -> str:
     dow_map_s = {"Monday": "月", "Tuesday": "火", "Wednesday": "水", "Thursday": "木",
