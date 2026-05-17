@@ -240,29 +240,29 @@ if _write_clicked:
 # ─── メインエリア ────────────────────────────────────────────────
 
 # 円形「予測を実行」ボタン用 CSS
+# メインエリア内の primary ボタンのみ対象（サイドバーは stSidebar 内なので除外される）
 st.markdown("""
 <style>
-div[data-testid="stMain"] div[data-testid="stHorizontalBlock"]:first-of-type
-  div[data-testid="column"]:last-child .stButton button {
+[data-testid="stMain"] [data-testid="stBaseButton-primary"] {
     background-color: #c0392b !important;
     color: white !important;
     border: none !important;
     border-radius: 50% !important;
-    width: 88px !important;
-    height: 88px !important;
+    width: 92px !important;
+    height: 92px !important;
     min-height: unset !important;
-    font-size: 0.83em !important;
+    font-size: 1.05em !important;
     font-weight: bold !important;
-    line-height: 1.4 !important;
+    line-height: 1.45 !important;
     padding: 0 !important;
     box-shadow: 0 3px 10px rgba(192,57,43,0.45) !important;
     white-space: pre-line !important;
+    transition: all 0.15s ease !important;
 }
-div[data-testid="stMain"] div[data-testid="stHorizontalBlock"]:first-of-type
-  div[data-testid="column"]:last-child .stButton button:hover {
+[data-testid="stMain"] [data-testid="stBaseButton-primary"]:hover {
     background-color: #e74c3c !important;
-    transform: scale(1.06);
-    box-shadow: 0 4px 14px rgba(192,57,43,0.55) !important;
+    transform: scale(1.07) !important;
+    box-shadow: 0 5px 16px rgba(192,57,43,0.6) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -275,9 +275,7 @@ with _text_col:
     st.markdown("<h1 style='margin-bottom:0'>Kichi<span style='font-size:0.55em;vertical-align:middle'>くん</span></h1>", unsafe_allow_html=True)
     st.caption(f"曜日・祝日・天候・気温を加味した日次売上予測 | 予測対象: {forecast_year}年")
 with _btn_col:
-    st.markdown("<div style='padding-top:8px'>", unsafe_allow_html=True)
-    run_button_circle = st.button("予測を\n実行", key="run_circle")
-    st.markdown("</div>", unsafe_allow_html=True)
+    run_button_circle = st.button("予測を\n実行", key="run_circle", type="primary")
 
 run_button = run_button or run_button_circle
 
