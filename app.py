@@ -540,6 +540,195 @@ if corrected_months:
 
 # ─── 直近2週間の炊飯計画 ─────────────────────────────────────────
 st.markdown("---")
+
+# ─── 傾向サマリー（今日・明日 / 1週間 / 今月）─────────────────────
+st.subheader("🗒️ スタッフ向け傾向サマリー")
+
+def _sales_level(yhat: float) -> str:
+    if yhat < 25_000:
+        return "静かな一日になりそう"
+    elif yhat < 40_000:
+        return "ほどよい忙しさが予想される"
+    elif yhat < 60_000:
+        return "やや忙しい一日になりそう"
+    elif yhat < 80_000:
+        return "忙しい一日が予想される"
+    else:
+        return "かなり忙しい一日になりそう"
+
+def _dow_label(ds) -> str:
+    dow_map_s = {"Monday": "月", "Tuesday": "火", "Wednesday": "水", "Thursday": "木",
+                 "Friday": "金", "Saturday": "土", "Sunday": "日"}
+    return dow_map_s.get(ds.day_name(), "")
+
+def _rice_summary(yhat, yhat_lower, yhat_upper) -> tuple:
+    lo = round((yhat + yhat_lower) / 2 / 2000)
+    hi = round((yhat_lower + yhat_upper) / 2 / 2000)
+    if lo < 13:
+        morning = 8
+    elif lo <= 16:
+        morning = 10
+    elif lo <= 18:
+        morning = 12
+    else:
+        morning = 16
+    add_lo = max(lo - morning, 0)
+    add_hi = max(hi - morning, 0)
+    if add_lo == 0 and add_hi == 0:
+        add_str = "0合"
+    elif add_lo >= add_hi:
+        add_str = f"{add_lo}合"
+    else:
+        add_str = f"{add_lo}合〜{add_hi}合"
+    return morning, add_str
+
+def _day_summary_text(row_data) -> str:
+    """1日分の傾向テキストを生成"""
+    if row_data is None:
+        return "データなし"
+    ds = row_data["ds"]
+    is_closed = row_data.get("is_closed", 0) == 1
+    dow = _dow_label(ds)
+    date_label = f"{ds.month}/{ds.day}（{dow}）"
+    is_holiday = row_data.get("is_holiday", 0) == 1
+
+    if is_closed:
+        return f"**{date_label}** ─ 定休日です。"
+
+    yhat = row_data["yhat"]
+    yhat_lower = row_data.get("yhat_lower", yhat)
+    yhat_upper = row_data.get("yhat_upper", yhat)
+    level = _sales_level(yhat)
+    morning, add_str = _rice_summary(yhat, yhat_lower, yhat_upper)
+    holiday_note = "　🎌 祝日" if is_holiday else ""
+    weekend_note = "　土日" if dow in ("土", "日") else ""
+    return (
+        f"**{date_label}{holiday_note}{weekend_note}** ─ {level}です。\n\n"
+        f"売上目安 **¥{yhat:,.0f}**（¥{yhat_lower:,.0f}〜¥{yhat_upper:,.0f}）\n\n"
+        f"炊飯：朝イチ **{morning}合**　追加 **{add_str}**"
+    )
+
+_today_s = date.today()
+_tomorrow_s = _today_s + timedelta(days=1)
+
+def _get_row(target_date):
+    mask = forecast_year_df["ds"].dt.date == target_date
+    sub = forecast_year_df[mask]
+    return sub.iloc[0].to_dict() if len(sub) > 0 else None
+
+# 今日・明日
+_today_row = _get_row(_today_s)
+_tomorrow_row = _get_row(_tomorrow_s)
+
+# 1週間（今日〜6日後）
+_wk_end = _today_s + timedelta(days=6)
+_wk_df = forecast_year_df[
+    (forecast_year_df["ds"].dt.date >= _today_s) &
+    (forecast_year_df["ds"].dt.date <= _wk_end)
+].copy()
+_wk_open = _wk_df[_wk_df.get("is_closed", pd.Series(0, index=_wk_df.index)).fillna(0) == 0] if "is_closed" in _wk_df.columns else _wk_df[_wk_df["yhat"] > 0]
+_wk_closed_cnt = len(_wk_df) - len(_wk_open)
+
+def _week_summary_text() -> str:
+    if len(_wk_open) == 0:
+        return "この1週間は全日休業の見込みです。"
+    total = _wk_open["yhat"].sum()
+    avg = _wk_open["yhat"].mean()
+    peak_row = _wk_open.loc[_wk_open["yhat"].idxmax()]
+    quiet_row = _wk_open.loc[_wk_open["yhat"].idxmin()]
+    peak_label = f"{peak_row['ds'].month}/{peak_row['ds'].day}（{_dow_label(peak_row['ds'])}）"
+    quiet_label = f"{quiet_row['ds'].month}/{quiet_row['ds'].day}（{_dow_label(quiet_row['ds'])}）"
+    closed_note = f"　休業日 {_wk_closed_cnt}日含む" if _wk_closed_cnt > 0 else ""
+    lines = [
+        f"**{_today_s.month}/{_today_s.day}〜{_wk_end.month}/{_wk_end.day}** の週間まとめ{closed_note}",
+        "",
+        f"合計見込み：**¥{total:,.0f}**（営業{len(_wk_open)}日）",
+        f"1日平均：**¥{avg:,.0f}**",
+        f"最も忙しい日：**{peak_label}** ¥{peak_row['yhat']:,.0f}",
+        f"最も静かな日：**{quiet_label}** ¥{quiet_row['yhat']:,.0f}",
+    ]
+    return "\n\n".join(lines)
+
+# 今月
+_cur_month = _today_s.month
+_month_df = forecast_year_df[forecast_year_df["ds"].dt.month == _cur_month].copy()
+_month_open = _month_df[_month_df["is_closed"] == 0] if "is_closed" in _month_df.columns else _month_df[_month_df["yhat"] > 0]
+_month_remaining = forecast_year_df[
+    (forecast_year_df["ds"].dt.date >= _today_s) &
+    (forecast_year_df["ds"].dt.month == _cur_month) &
+    (forecast_year_df["is_closed"] == 0 if "is_closed" in forecast_year_df.columns else forecast_year_df["yhat"] > 0)
+]
+
+def _month_summary_text() -> str:
+    if len(_month_open) == 0:
+        return f"{_cur_month}月のデータがありません。"
+    total = _month_open["yhat"].sum()
+    avg = _month_open["yhat"].mean()
+    remain_total = _month_remaining["yhat"].sum() if len(_month_remaining) > 0 else 0
+    target = manual_monthly_avg.get(_cur_month, 35_000) * (1 + growth_rate)
+    gap = avg - target
+    if gap >= 2_000:
+        vs_target = f"目標を **¥{gap:,.0f} 上回る** 水準"
+    elif gap <= -2_000:
+        vs_target = f"目標を **¥{abs(gap):,.0f} 下回る** 水準"
+    else:
+        vs_target = "目標とほぼ同水準"
+    # 週ごとの合計で最も忙しい週を特定
+    _month_df2 = _month_open.copy()
+    _month_df2["week"] = _month_df2["ds"].dt.isocalendar().week
+    week_totals = _month_df2.groupby("week")["yhat"].sum()
+    busy_week_num = week_totals.idxmax() if len(week_totals) > 0 else None
+    busy_week_note = ""
+    if busy_week_num is not None:
+        busy_days = _month_df2[_month_df2["week"] == busy_week_num]["ds"]
+        if len(busy_days) > 0:
+            w_start = busy_days.min()
+            w_end = busy_days.max()
+            busy_week_note = f"\n\n最も売上が見込まれる週：**{w_start.month}/{w_start.day}〜{w_end.month}/{w_end.day}** 頃"
+    lines = [
+        f"**{_cur_month}月** の月間まとめ",
+        "",
+        f"月間合計見込み：**¥{total:,.0f}**（営業{len(_month_open)}日）",
+        f"1日平均：**¥{avg:,.0f}**　（{vs_target}）",
+        f"今日以降の残り売上見込み：**¥{remain_total:,.0f}**{busy_week_note}",
+    ]
+    return "\n\n".join(lines)
+
+_col_today, _col_week, _col_month = st.columns(3)
+
+with _col_today:
+    st.markdown(
+        "<div style='background:#fff8f0;border-left:4px solid #e67e22;"
+        "padding:16px;border-radius:6px;min-height:180px'>"
+        "<p style='color:#e67e22;font-weight:bold;margin:0 0 8px'>📅 今日・明日</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(_day_summary_text(_today_row))
+    st.markdown("---")
+    st.markdown(_day_summary_text(_tomorrow_row))
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with _col_week:
+    st.markdown(
+        "<div style='background:#f0f8ff;border-left:4px solid #2980b9;"
+        "padding:16px;border-radius:6px;min-height:180px'>"
+        "<p style='color:#2980b9;font-weight:bold;margin:0 0 8px'>📈 この1週間</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(_week_summary_text())
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with _col_month:
+    st.markdown(
+        "<div style='background:#f0fff4;border-left:4px solid #27ae60;"
+        "padding:16px;border-radius:6px;min-height:180px'>"
+        f"<p style='color:#27ae60;font-weight:bold;margin:0 0 8px'>🗓️ {_cur_month}月の見通し</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(_month_summary_text())
+    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("---")
 st.subheader("📆 直近2週間の予測・炊飯計画")
 
 def _morning_rice_2wk(lo: int) -> int:
