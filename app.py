@@ -612,17 +612,18 @@ def _dow_label(ds) -> str:
                  "Friday": "金", "Saturday": "土", "Sunday": "日"}
     return dow_map_s.get(ds.day_name(), "")
 
+def _morning_rice_logic(lo: int) -> int:
+    if lo < 15:
+        return 10
+    elif lo <= 18:
+        return 12
+    else:
+        return 16
+
 def _rice_summary(yhat, yhat_lower, yhat_upper) -> tuple:
     lo = round((yhat + yhat_lower) / 2 / 2000)
     hi = round((yhat_lower + yhat_upper) / 2 / 2000)
-    if lo < 13:
-        morning = 8
-    elif lo <= 16:
-        morning = 10
-    elif lo <= 18:
-        morning = 12
-    else:
-        morning = 16
+    morning = _morning_rice_logic(lo)
     add_lo = max(lo - morning, 0)
     add_hi = max(hi - morning, 0)
     if add_lo == 0 and add_hi == 0:
@@ -904,14 +905,7 @@ st.markdown("---")
 st.subheader("📆 直近2週間の予測・炊飯計画")
 
 def _morning_rice_2wk(lo: int) -> int:
-    if lo < 13:
-        return 8
-    elif lo <= 16:
-        return 10
-    elif lo <= 18:
-        return 12
-    else:
-        return 16
+    return _morning_rice_logic(lo)
 
 def _build_2wk_row(r, is_closed_series):
     closed = is_closed_series[r.name] == 1
@@ -1216,14 +1210,7 @@ with tab1:
             lambda r: "―" if is_closed_col[r.name] == 1 else f"¥{r['yhat_upper']:,.0f}", axis=1
         )
         def _morning_rice(lo: int) -> int:
-            if lo < 13:
-                return 8
-            elif lo <= 16:
-                return 10
-            elif lo <= 18:
-                return 12
-            else:
-                return 16
+            return _morning_rice_logic(lo)
 
         def _rice_cols(r):
             closed = is_closed_col[r.name] == 1
