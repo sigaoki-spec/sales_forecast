@@ -615,8 +615,10 @@ def _dow_label(ds) -> str:
 def _morning_rice_logic(lo: int) -> int:
     if lo < 15:
         return 10
-    elif lo <= 18:
+    elif lo < 17:
         return 12
+    elif lo < 18:
+        return 14
     else:
         return 16
 
