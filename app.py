@@ -298,6 +298,7 @@ _run_logs = []
 if not run_button:
     _c = st.session_state["forecast_cache"]
     forecast_year_df        = _c["forecast_year_df"]
+    initial_forecast_df     = _c.get("initial_forecast_df", forecast_year_df)
     comparison_df           = _c["comparison_df"]
     has_actual              = _c["has_actual"]
     actual_in_forecast_year = _c["actual_in_forecast_year"]
@@ -488,6 +489,26 @@ else:
         ].copy()
         current_month_num = date.today().month if date.today().year == forecast_year else 0
 
+        # ── 当初予測（比較タブ専用）: 実績で上書きしない純粋なモデル予測 ──
+        original_targets = {
+            m: manual_monthly_avg.get(m, 35000) * (1 + growth_rate)
+            for m in range(1, 13)
+        }
+        initial_forecast_df = adjust_by_manual_monthly_avg(
+            forecast_year_df.copy(), original_targets, growth_rate=0.0
+        )
+        initial_forecast_df, _, _ = apply_weekday_weekend_correction(
+            initial_forecast_df, sales_df, holidays_df, forecast_year
+        )
+        if obon_multiplier > 1.0:
+            initial_forecast_df = apply_obon_boost(initial_forecast_df, obon_multiplier=obon_multiplier)
+        initial_forecast_df = apply_min_daily_floor(
+            initial_forecast_df,
+            min_monthly_avg=float(min_monthly_avg),
+            min_annual_avg=float(min_annual_avg),
+        )
+
+        # ── 表示用予測: 実績月は実績平均で補正（炊飯量・日次表示用） ──
         effective_targets = {}
         for month in range(1, 13):
             month_actual = actual_2026[actual_2026["ds"].dt.month == month]
@@ -550,7 +571,8 @@ else:
     has_actual = len(actual_in_forecast_year) > 0
 
     if has_actual:
-        comparison_df = forecast_year_df[["ds", "yhat", "yhat_lower", "yhat_upper"]].merge(
+        # 比較タブでは「当初予測」vs「実績」を見せる（実績補正後の予測は使わない）
+        comparison_df = initial_forecast_df[["ds", "yhat", "yhat_lower", "yhat_upper"]].merge(
             actual_in_forecast_year.rename(columns={"y": "actual"}),
             on="ds", how="left",
         )
@@ -562,6 +584,7 @@ else:
     # ─── キャッシュ保存 ─────────────────────────────────────────────
     st.session_state["forecast_cache"] = {
         "forecast_year_df":        forecast_year_df,
+        "initial_forecast_df":     initial_forecast_df,
         "comparison_df":           comparison_df,
         "has_actual":              has_actual,
         "actual_in_forecast_year": actual_in_forecast_year,
