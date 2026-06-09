@@ -939,9 +939,28 @@ def _build_2wk_row(r, is_closed_series):
     date_str = r["ds"].strftime("%m/%d")
     dow_str = r["ds"].day_name()
     dow_ja = dow_map_2wk.get(dow_str, dow_str)
+
+    # 天候・気温
+    w = _weather_for(r["ds"].date())
+    if not w:
+        weather_label = "―"
+        temp_str = "―"
+        temp_hot = False
+    else:
+        if w.get("is_snow"):
+            weather_label = "雪"
+        elif w.get("is_rain"):
+            weather_label = "雨"
+        else:
+            weather_label = "晴"
+        temp_val = w.get("temp_avg")
+        temp_str = f"{temp_val:.0f}℃" if temp_val is not None else "―"
+        temp_hot = (temp_val is not None and temp_val >= 30)
+
     if closed:
         return {
             "date_str": date_str, "dow": dow_ja,
+            "weather": weather_label, "temp": temp_str, "temp_hot": temp_hot,
             "sales": "休業日", "lower": "―", "upper": "―",
             "est": "―", "morning": "―", "add": "―",
             "is_closed": True,
@@ -960,6 +979,7 @@ def _build_2wk_row(r, is_closed_series):
         add_str = f"{add_lo}合〜{add_hi}合"
     return {
         "date_str": date_str, "dow": dow_ja,
+        "weather": weather_label, "temp": temp_str, "temp_hot": temp_hot,
         "sales": f"¥{r['yhat']:,.0f}",
         "lower": f"¥{r['yhat_lower']:,.0f}",
         "upper": f"¥{r['yhat_upper']:,.0f}",
@@ -982,6 +1002,7 @@ if len(_2wk_df) > 0:
     _header = (
         "<thead><tr>"
         "<th>日付</th><th>曜日</th>"
+        "<th>天候</th><th>最高気温</th>"
         "<th>予測売上</th><th>下限</th><th>上限</th>"
         "<th style='font-size:1.2em'>推定炊飯量</th>"
         "<th style='font-size:1.2em'>朝イチ</th>"
@@ -998,10 +1019,13 @@ if len(_2wk_df) > 0:
             r_style = closed_rice
         else:
             r_style = rice_style
+        temp_style = "color:red;font-weight:bold;text-align:center" if rw["temp_hot"] else "text-align:center"
         _body_rows.append(
             f"<tr style='background:{bg}'>"
             f"<td>{rw['date_str']}</td>"
             f"<td style='color:{dow_color};font-weight:bold'>{rw['dow']}</td>"
+            f"<td style='text-align:center'>{rw['weather']}</td>"
+            f"<td style='{temp_style}'>{rw['temp']}</td>"
             f"<td>{rw['sales']}</td>"
             f"<td style='color:#555'>{rw['lower']}</td>"
             f"<td style='color:#555'>{rw['upper']}</td>"
@@ -1015,7 +1039,7 @@ if len(_2wk_df) > 0:
         "table.forecast2wk {border-collapse:collapse;width:100%;font-size:0.95em}"
         "table.forecast2wk th {background:#34495e;color:white;padding:8px 12px;text-align:center}"
         "table.forecast2wk td {padding:7px 12px;border-bottom:1px solid #ddd;text-align:right}"
-        "table.forecast2wk td:nth-child(1), table.forecast2wk td:nth-child(2) {text-align:center}"
+        "table.forecast2wk td:nth-child(1), table.forecast2wk td:nth-child(2), table.forecast2wk td:nth-child(3), table.forecast2wk td:nth-child(4) {text-align:center}"
         "</style>"
         f"<table class='forecast2wk'>{_header}<tbody>{''.join(_body_rows)}</tbody></table>"
     )
