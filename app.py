@@ -947,15 +947,26 @@ def _build_2wk_row(r, is_closed_series):
         temp_str = "―"
         temp_hot = False
     else:
+        code = w.get("weather_code")
         if w.get("is_snow"):
             weather_label = "雪"
+        elif code is not None and pd.notna(code) and 95 <= int(code) <= 99:
+            weather_label = "雷"
         elif w.get("is_rain"):
             weather_label = "雨"
+        elif code is not None and pd.notna(code) and 45 <= int(code) <= 48:
+            weather_label = "霧"
+        elif code is not None and pd.notna(code) and int(code) == 3:
+            weather_label = "曇"
         else:
             weather_label = "晴"
-        temp_val = w.get("temp_avg")
-        temp_str = f"{temp_val:.0f}℃" if temp_val is not None else "―"
-        temp_hot = (temp_val is not None and temp_val >= 30)
+        # 見出しは「最高気温」なので temp_max を使う（予報16日超の推定期間は temp_avg で代用）
+        temp_val = w.get("temp_max")
+        if temp_val is None or pd.isna(temp_val):
+            temp_val = w.get("temp_avg")
+        valid_temp = temp_val is not None and pd.notna(temp_val)
+        temp_str = f"{temp_val:.0f}℃" if valid_temp else "―"
+        temp_hot = bool(valid_temp and temp_val > 30)
 
     if closed:
         return {
