@@ -1,4 +1,6 @@
 """日本の祝日・特別日フラグを付与する"""
+from __future__ import annotations
+
 import datetime
 import jpholiday
 import pandas as pd
@@ -97,15 +99,19 @@ def _make_special_period_rows(year: int, month: int, day: int,
     return rows
 
 
-def build_prophet_holidays() -> pd.DataFrame:
+def build_prophet_holidays(through_year: int | None = None) -> pd.DataFrame:
     """
     Prophet の holidays DataFrame を構築する。
     公式祝日に加え、お盆・GW・年末年始を特別期間として追加する。
+
+    through_year: 祝日を生成する最終年（予測対象年）。未指定なら翌々年まで。
     """
     current_year = datetime.date.today().year
+    # 予測対象年が将来でも必ずカバーするよう上限を決める（過去は学習用に4年分）
+    last_year = max(current_year + 2, (through_year or 0) + 1)
     rows = []
 
-    for year in range(current_year - 4, current_year + 2):
+    for year in range(current_year - 4, last_year + 1):
         # ① 公式祝日
         start = datetime.date(year, 1, 1)
         end = datetime.date(year, 12, 31)

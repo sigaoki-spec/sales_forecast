@@ -434,7 +434,7 @@ else:
     with st.spinner("予測モデルを学習しています..."):
         try:
             feature_df = build_features(sales_df, full_weather, trends_df=full_trends)
-            holidays_df = build_prophet_holidays()
+            holidays_df = build_prophet_holidays(through_year=forecast_year)
             model, use_logistic, _cap, _floor = train_model(
                 feature_df, holidays_df,
                 changepoint_prior_scale=changepoint_prior,
