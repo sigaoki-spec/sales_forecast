@@ -1315,6 +1315,12 @@ with tab2:
 
     month_labels = monthly["月"].astype(str) + "月"
 
+    # ── 前年実績（過去比較用）：sales_df から base_year の月次集計 ──
+    _prev_actual = sales_df[(sales_df["ds"].dt.year == base_year) & (sales_df["y"] > 0)].copy()
+    _prev_total = _prev_actual.groupby(_prev_actual["ds"].dt.month)["y"].sum().reindex(range(1, 13))
+    _prev_avg = _prev_actual.groupby(_prev_actual["ds"].dt.month)["y"].mean().reindex(range(1, 13))
+    _has_prev = len(_prev_actual) > 0
+
     # ── グラフ①：月次売上合計 ──
     st.markdown("**月次売上合計**")
     fig_monthly = go.Figure()
@@ -1324,13 +1330,24 @@ with tab2:
         text=monthly["予測売上合計"].map(lambda x: f"¥{x/10000:.0f}万"),
         textposition="outside",
         marker_color="steelblue",
-        name="予測売上合計",
+        name=f"{forecast_year}年予測",
     ))
+    if _has_prev:
+        fig_monthly.add_trace(go.Bar(
+            x=month_labels,
+            y=_prev_total.values,
+            marker_color="#cfd8dc",
+            name=f"{base_year}年実績",
+            hovertemplate="¥%{y:,.0f}<extra></extra>",
+        ))
+    _mtotal_max = max(monthly["予測売上合計"].max(), (_prev_total.max() if _has_prev else 0))
     fig_monthly.update_layout(
+        barmode="group", bargap=0.25, bargroupgap=0.1,
         xaxis_title="月", yaxis_title="売上合計（円）",
         yaxis_tickformat=",",
-        yaxis_range=[0, monthly["予測売上合計"].max() * 1.15],
+        yaxis_range=[0, _mtotal_max * 1.15],
         height=350, margin=dict(t=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     st.plotly_chart(fig_monthly, use_container_width=True)
 
@@ -1356,8 +1373,16 @@ with tab2:
         text=monthly["営業日平均売上"].map(lambda x: f"¥{x:,.0f}"),
         textposition="outside",
         marker_color=bar_colors,
-        name="営業日平均",
+        name=f"{forecast_year}年予測",
     ))
+    if _has_prev:
+        fig_avg.add_trace(go.Bar(
+            x=month_labels,
+            y=_prev_avg.values,
+            marker_color="#cfd8dc",
+            name=f"{base_year}年実績",
+            hovertemplate="¥%{y:,.0f}<extra></extra>",
+        ))
     # 月次下限ライン
     fig_avg.add_hline(
         y=min_monthly_avg,
@@ -1372,11 +1397,14 @@ with tab2:
         annotation_text=f"年間下限 ¥{min_annual_avg:,}",
         annotation_position="top right",
     )
+    _mavg_max = max(monthly["営業日平均売上"].max(), (_prev_avg.max() if _has_prev else 0))
     fig_avg.update_layout(
+        barmode="group", bargap=0.25, bargroupgap=0.1,
         xaxis_title="月", yaxis_title="営業日平均（円）",
         yaxis_tickformat=",",
-        yaxis_range=[0, monthly["営業日平均売上"].max() * 1.2],
+        yaxis_range=[0, _mavg_max * 1.2],
         height=380, margin=dict(t=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     st.plotly_chart(fig_avg, use_container_width=True)
 
